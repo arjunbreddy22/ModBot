@@ -1,6 +1,9 @@
 import os
 import discord
 from dotenv import load_dotenv
+from agent.agent import ModerationAgent
+
+ 
 
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
@@ -10,6 +13,7 @@ intents.message_content = True
 
 client = discord.Client(intents=intents)
 
+agent = ModerationAgent() 
 @client.event
 async def on_ready():
     print(f"🤖 Logged in as {client.user}")
@@ -18,8 +22,36 @@ async def on_ready():
 async def on_message(message):
     if message.author == client.user:
         return
-
+    
     print(f"📩 {message.author}: {message.content}")
-    await message.channel.send("✅ Message received!")
+
+    #handles update_rules
+    if message.content.startswith("!update_rules "):
+        rules_text = message.content[len("!update_rules "):]
+        await agent.update_rules(rules_text)
+        await message.channel.send("✅ Rules updated.")
+        print(agent.rules_source)
+        return
+    # Ask the agent what to do
+    action = await agent.moderate_message(message.content)
+
+    # Execute the action
+    if action == "OK":
+        print(action)
+        return
+
+    if action == "WARN":
+        print(action)
+        await message.channel.send("⚠️ Please watch your language.")
+
+    elif action == "DELETE":
+        print(action)
+        await message.delete()
+        await message.channel.send("Message deleted.")
+
+    elif action == "BAN":
+        print(action)
+        await message.author.ban(reason="Violation of rules")
+        await message.channel.send("User banned.")
 
 client.run(TOKEN)
