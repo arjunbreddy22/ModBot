@@ -2,3 +2,5 @@ discord.py
 python-dotenv
 openai>=1.30.0
 llama-index>=0.10.0
+openai
+pymongo
