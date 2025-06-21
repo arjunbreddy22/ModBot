@@ -1,129 +1,57 @@
-# agent_service.py
-
-from os import environ
+import os
+import discord
 from dotenv import load_dotenv
-from typing import List, Optional, cast
+from agent.agent_service import ModerationAgent
 
-# Load env vars
+ 
+
 load_dotenv()
-OPENAI_API_KEY = environ["OPENAI_API_KEY"]
+TOKEN = os.getenv("DISCORD_TOKEN")
 
-from llama_index.core import VectorStoreIndex
-from llama_index.core.agent import ReActAgent
-from llama_index.core.tools import QueryEngineTool, ToolMetadata, BaseTool
-from llama_index.llms.openai import OpenAI
-from llama_index.core.schema import Document
+intents = discord.Intents.default()
+intents.message_content = True
 
-class ModerationAgent:
-    def __init__(
-        self,
-        server_rules: Optional[str] = None,  # server rules passed as a big string
-        model_name: str = "gpt-4o",
-    ):
-        # Load LLM
-        self.llm = OpenAI(model=model_name)
+client = discord.Client(intents=intents)
 
-        # Update rules if provided
-        if server_rules:
-            self.update_rules_text(server_rules)
-        else:
-            # default baked-in system prompt
-            self.system_prompt = """You are an expert Discord moderation agent.
+agent = ModerationAgent() 
+@client.event
+async def on_ready():
+    print(f"🤖 Logged in as {client.user}")
 
-Moderation rules:
-- Hate speech → Ban
-- Harassment → Ban
-- Spam → Ban
-- Mild insults → Delete
-- Repeated minor violations → Warn
-- Normal messages → OK
+@client.event
+async def on_message(message):
+    if message.author == client.user:
+        return
+    
+    print(f"📩 {message.author}: {message.content}")
 
-Respond ONLY with one word: OK, Delete, Warn, or Ban."""
+    #handles update_rules
+    if message.content.startswith("!update_rules "):
+        rules_text = message.content[len("!update_rules "):]
+        agent.update_rules_text(rules_text)
+        await message.channel.send("✅ Rules updated.")
+        print(agent.rules_source)
+        return
+    # Ask the agent what to do
+    action = agent.moderate_message(message.content)
 
-            # Build empty agent — no tools
-            self.agent = ReActAgent.from_tools(
-                tools=[],
-                llm=self.llm,
-                verbose=True,
-                system_prompt=self.system_prompt,
-                max_turns=3,
-            )
+    # Execute the action
+    if action == "OK":
+        print(action)
+        return
 
-    def moderate_message(self, message: str, context: Optional[List[str]] = None) -> str:
-        VALID_ACTIONS = {"OK", "Delete", "Warn", "Ban"}
+    if action == "Warn":
+        print(action)
+        await message.channel.send("⚠️ Please watch your language.")
 
-        if context is None:
-            context = []
+    elif action == "Delete":
+        print(action)
+        await message.delete()
+        await message.channel.send("Message deleted.")
 
-        # Use last 5 messages for context
-        context_text = "\n".join(context[-5:])
+    elif action == "Ban":
+        print(action)
+        await message.author.ban(reason="Violation of rules")
+        await message.channel.send("User banned.")
 
-        # Build full prompt
-        full_prompt = f"""
-Context:
-{context_text}
-
-New Message:
-"{message}"
-
-Decide moderation action.
-
-You MUST respond with exactly one of these words (no other text):
-OK, Delete, Warn, or Ban
-"""
-
-        # Call agent
-        response = self.agent.chat(full_prompt)
-        action = str(response).strip()
-
-        # Hard fallback — only allow valid actions
-        if action not in VALID_ACTIONS:
-            print(f"[WARNING] Invalid action returned: {action}. Defaulting to OK.")
-            action = "OK"
-
-        print(f"Moderation decision: {action}")
-        return action
-
-    def update_rules_text(self, rules_text: str) -> None:
-        """Load server rules from a plain text string (instead of a file)."""
-        print("Loading new server rules from text...")
-
-        # Store rules_text into self.server_rules
-        self.server_rules = rules_text
-
-        # Build new system prompt — replacing old baked-in rules
-        self.system_prompt = f"""You are an expert Discord moderation agent.
-
-Follow these exact moderation rules:
-
-{rules_text}
-
-Respond ONLY with one word: OK, Delete, Warn, or Ban."""
-
-        # Convert rules_text into a document object for indexing
-        rules_doc = Document(text=rules_text, metadata={"source": "server_rules_channel"})
-
-        # Build new index
-        rules_index = VectorStoreIndex.from_documents([rules_doc])
-        rules_engine = rules_index.as_query_engine(similarity_top_k=3)
-
-        # Build tool
-        rules_tool = QueryEngineTool(
-            query_engine=rules_engine,
-            metadata=ToolMetadata(
-                name="server_rules",
-                description="Provides information about server moderation policies.",
-            ),
-        )
-
-        # Create new agent with updated rules tool
-        tools: List[BaseTool] = [rules_tool]
-        self.agent = ReActAgent.from_tools(
-            tools=cast(List[BaseTool], tools),
-            llm=self.llm,
-            verbose=True,
-            system_prompt=self.system_prompt,
-            max_turns=3,
-        )
-
-        print("Server rules updated successfully from text.")
+client.run(TOKEN)
