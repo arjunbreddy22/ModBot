@@ -48,7 +48,7 @@ Respond ONLY with one word: OK, Delete, Warn, or Ban."""
                 system_prompt=self.system_prompt,
                 max_turns=3,
             )
-
+    '''
     def moderate_message(self, message: str, context: Optional[List[str]] = None) -> str:
         VALID_ACTIONS = {"OK", "Delete", "Warn", "Ban"}
 
@@ -83,6 +83,35 @@ OK, Delete, Warn, or Ban
 
         print(f"Moderation decision: {action}")
         return action
+    '''
+    def moderate_message(self, message: str, context: Optional[List[str]] = None) -> str:
+        """
+        Let the ReActAgent do its full Thought→Action→Observation loop
+        (including calling server_rules) by passing it raw input.
+        Returns exactly one of: "OK", "Delete", "Warn", or "Ban".
+        """
+        VALID_ACTIONS = {"OK", "Delete", "Warn", "Ban"}
+
+        # Optionally prepend context to the message if you still want it:
+        if context:
+            context_text = "\n".join(context[-5:])
+            prompt_input = f"Context:\n{context_text}\n\n{message}"
+        else:
+            prompt_input = message
+
+        # 1) Hand the raw prompt into the ReAct agent
+        response = self.agent.chat(prompt_input)
+        action = str(response).strip()
+
+        # 2) Fallback guard
+        if action not in VALID_ACTIONS:
+            print(f"[WARNING] Invalid action returned: {action}. Defaulting to OK.")
+            action = "OK"
+
+        print(f"Moderation decision: {action}")
+        return action
+
+
 
     def update_rules_text(self, rules_text: str) -> None:
         """Load server rules from a plain text string (instead of a file)."""
