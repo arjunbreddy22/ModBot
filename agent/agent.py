@@ -1,3 +1,4 @@
+'''
 import random
 from typing import List, Optional
 
@@ -33,3 +34,5 @@ class ModerationAgent:
         print(f"[ModerationAgent] update_rules called; new rules_source={self.rules_source}")
         # TODO: implement actual rules loading logic
         return
+'''
+
