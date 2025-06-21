@@ -3,10 +3,11 @@ import discord
 from dotenv import load_dotenv
 from agent.agent_service import ModerationAgent
 
- 
-
 load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
+
+if not TOKEN:
+    raise ValueError("DISCORD_TOKEN environment variable not found")
 
 intents = discord.Intents.default()
 intents.message_content = True
