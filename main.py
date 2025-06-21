@@ -30,7 +30,7 @@ async def on_message(message):
         rules_text = message.content[len("!update_rules "):]
         agent.update_rules_text(rules_text)
         await message.channel.send("✅ Rules updated.")
-        print(agent.rules_source)
+        print(agent.server_rules)
         return
     # Ask the agent what to do
     action = agent.moderate_message(message.content)
